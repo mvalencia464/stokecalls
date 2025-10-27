@@ -174,12 +174,34 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in transcribe-call:', error);
+    console.error('Error type:', typeof error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+
+    // Better error serialization
+    let errorMessage = 'Unknown error';
+    let errorDetails = {};
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      errorDetails = {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      };
+    } else if (typeof error === 'object' && error !== null) {
+      errorMessage = JSON.stringify(error);
+      errorDetails = error;
+    } else {
+      errorMessage = String(error);
+    }
+
+    console.error('Serialized error:', errorMessage);
+
     return NextResponse.json(
       {
         error: 'Failed to transcribe call',
-        details: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
+        details: errorMessage,
+        debug: errorDetails
       },
       { status: 500 }
     );
