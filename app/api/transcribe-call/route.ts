@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     }
 
     const transcriptData = await transcribeResponse.json();
-    console.log('✅ Transcription successful:', result.transcriptId);
+    console.log('✅ Transcription successful:', transcriptData);
 
     console.log('Transcription completed successfully');
 
