@@ -26,7 +26,7 @@ export interface TranscriptAnalysis {
  */
 export async function analyzeTranscript(
   fullText: string,
-  speakers: Array<{ speaker: string; text: string; start: number; end: number }>
+  speakers: Array<{ speaker: string; text: string; start_ms: number; end_ms: number }>
 ): Promise<TranscriptAnalysis> {
   try {
     const genAI = getGeminiClient();
@@ -101,7 +101,7 @@ Important:
 export async function askAboutTranscript(
   question: string,
   fullText: string,
-  speakers: Array<{ speaker: string; text: string; start: number; end: number }>,
+  speakers: Array<{ speaker: string; text: string; start_ms: number; end_ms: number }>,
   conversationHistory: Array<{ role: 'user' | 'ai'; text: string }> = []
 ): Promise<string> {
   try {
