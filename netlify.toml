@@ -5,21 +5,9 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[functions]
-  # Increase function timeout for API routes (default is 10s)
-  # Webhooks need to be able to process transcripts
-  node_bundler = "esbuild"
-
 # Environment variables (set these in Netlify dashboard)
 # ASSEMBLYAI_API_KEY
 # GHL_ACCESS_TOKEN
 # NEXT_PUBLIC_GHL_LOCATION_ID
 # OPENAI_API_KEY (if using AI features)
-
-# Redirect rules for Next.js
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/___netlify-handler"
-  status = 200
-  force = false
 
