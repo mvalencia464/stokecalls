@@ -1,7 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const DB_DIR = path.join(process.cwd(), 'data');
+// Use /tmp for serverless environments like Netlify
+const DB_DIR = process.env.NETLIFY ? '/tmp/data' : path.join(process.cwd(), 'data');
 const TRANSCRIPTS_FILE = path.join(DB_DIR, 'transcripts.json');
 
 export type Sentiment = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
