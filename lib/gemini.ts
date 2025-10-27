@@ -30,7 +30,7 @@ export async function analyzeTranscript(
 ): Promise<TranscriptAnalysis> {
   try {
     const genAI = getGeminiClient();
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' }); // Fast and cheap!
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' }); // Fast and cheap!
 
     // Format the transcript for better analysis
     const formattedTranscript = speakers
@@ -106,7 +106,7 @@ export async function askAboutTranscript(
 ): Promise<string> {
   try {
     const genAI = getGeminiClient();
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
 
     // Format the transcript
     const formattedTranscript = speakers
