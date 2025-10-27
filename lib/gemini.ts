@@ -136,7 +136,13 @@ Provide a helpful, specific answer based on the transcript. If the information i
     return response.text();
   } catch (error) {
     console.error('Error asking Gemini about transcript:', error);
-    return "I'm sorry, I encountered an error while analyzing the transcript. Please try again.";
+    // Log the full error details for debugging
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+    throw error; // Re-throw so the API endpoint can handle it properly
   }
 }
 
