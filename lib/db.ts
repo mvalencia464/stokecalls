@@ -1,8 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-// Use /tmp for serverless environments like Netlify
-const DB_DIR = process.env.NETLIFY ? '/tmp/data' : path.join(process.cwd(), 'data');
+// Always use /tmp for now since we're deployed on Netlify (serverless)
+// TODO: Replace with a proper database (Supabase, PostgreSQL, etc.)
+const DB_DIR = '/tmp/data';
 const TRANSCRIPTS_FILE = path.join(DB_DIR, 'transcripts.json');
 
 export type Sentiment = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
