@@ -91,7 +91,6 @@ export async function POST(request: NextRequest) {
       webhook_url: webhookUrl,
       speaker_labels: true,
       speakers_expected: 2,
-      auto_chapters: true,
       sentiment_analysis: true,
       auto_highlights: true,
       entity_detection: true,
