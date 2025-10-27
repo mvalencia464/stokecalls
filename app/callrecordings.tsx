@@ -957,7 +957,12 @@ function CallsTab({ contactId, onTranscriptionComplete }: { contactId: string, o
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || 'Transcription failed');
+        const errorMessage = typeof errorData.details === 'string'
+          ? errorData.details
+          : typeof errorData.error === 'string'
+          ? errorData.error
+          : JSON.stringify(errorData.details || errorData.error || errorData);
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

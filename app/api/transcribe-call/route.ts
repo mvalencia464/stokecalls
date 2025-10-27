@@ -174,8 +174,13 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in transcribe-call:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
-      { error: 'Failed to transcribe call', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Failed to transcribe call',
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
