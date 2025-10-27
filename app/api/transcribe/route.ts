@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveTranscript } from '@/lib/db';
+import { AssemblyAI } from 'assemblyai';
 
 interface TranscribeRequest {
   audioUrl: string;
@@ -71,7 +72,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Starting transcription for audio:', audioUrl);
+    console.log('🎙️ Starting transcription for audio:', audioUrl);
+
+    // Initialize AssemblyAI client
+    const client = new AssemblyAI({
+      apiKey: apiKey
+    });
 
     // Get the webhook URL for AssemblyAI callbacks
     const baseUrl = request.nextUrl.origin;
@@ -79,45 +85,26 @@ export async function POST(request: NextRequest) {
 
     console.log('🔗 Webhook URL:', webhookUrl);
 
-    // Step 1: Submit audio for transcription with webhook
-    const submitResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
-      method: 'POST',
-      headers: {
-        'authorization': apiKey,
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        audio_url: audioUrl,
-        webhook_url: webhookUrl, // AssemblyAI will POST here when done
-        speaker_labels: true,
-        speakers_expected: 2, // Typically agent + contact
-        auto_chapters: true,
-        sentiment_analysis: true,
-        auto_highlights: true,
-        entity_detection: true,
-        iab_categories: false, // Set to true if you want content categorization
-        content_safety: false,
-        summarization: true,
-        summary_model: 'informative',
-        summary_type: 'bullets'
-      })
+    // Step 1: Submit audio for transcription with webhook using SDK
+    const transcript = await client.transcripts.submit({
+      audio: audioUrl,
+      webhook_url: webhookUrl,
+      speaker_labels: true,
+      speakers_expected: 2,
+      auto_chapters: true,
+      sentiment_analysis: true,
+      auto_highlights: true,
+      entity_detection: true,
+      summarization: true,
+      summary_model: 'informative',
+      summary_type: 'bullets'
     });
 
-    if (!submitResponse.ok) {
-      const errorText = await submitResponse.text();
-      console.error('AssemblyAI submission error:', submitResponse.status, errorText);
-      return NextResponse.json(
-        { error: `AssemblyAI error: ${submitResponse.status}`, details: errorText },
-        { status: submitResponse.status }
-      );
-    }
-
-    const submitData: AssemblyAITranscript = await submitResponse.json();
-    const transcriptId = submitData.id;
+    const transcriptId = transcript.id;
 
     console.log('✅ Transcription submitted successfully!');
     console.log('📋 Transcript ID:', transcriptId);
-    console.log('⏳ Status:', submitData.status);
+    console.log('⏳ Status:', transcript.status);
     console.log('🔔 Webhook will be called at:', webhookUrl);
 
     // Step 2: Create a placeholder transcript in the database
@@ -182,24 +169,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const response = await fetch(
-      `https://api.assemblyai.com/v2/transcript/${transcriptId}`,
-      {
-        headers: {
-          'authorization': apiKey
-        }
-      }
-    );
+    // Use SDK to get transcript
+    const client = new AssemblyAI({ apiKey });
+    const transcript = await client.transcripts.get(transcriptId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return NextResponse.json(
-        { error: `AssemblyAI error: ${response.status}`, details: errorText },
-        { status: response.status }
-      );
-    }
-
-    const transcript = await response.json();
     return NextResponse.json(transcript);
 
   } catch (error) {
