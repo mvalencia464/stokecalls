@@ -155,21 +155,16 @@ export async function POST(request: NextRequest) {
     const transcriptData = await transcribeResponse.json();
     console.log('✅ Transcription successful:', transcriptData);
 
-    // Step 5: Save transcript to database
-    const savedTranscript = await saveTranscript({
-      ...transcriptData,
-      audio_url: audioUrl,
-      status: 'completed' as const
-    });
-
-    console.log('Transcript saved to database:', savedTranscript.id);
+    // Step 5: The transcript is already saved by /api/transcribe
+    // We don't need to save it again here - just return the response
+    console.log('Transcript already saved by /api/transcribe');
 
     return NextResponse.json({
       success: true,
       messageId,
       contactId,
       audioUrl,
-      transcript: savedTranscript
+      transcript: transcriptData.transcript
     });
 
   } catch (error) {
