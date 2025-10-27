@@ -61,15 +61,52 @@ export async function POST(request: NextRequest) {
 
     // Handle nested message structure
     const message = messageData.message || messageData;
-    const audioUrl = message.attachments?.[0]?.url || message.attachments?.[0];
+
+    // Try multiple ways to get the audio URL
+    let audioUrl = null;
+
+    // Method 1: Direct attachment URL
+    if (message.attachments?.[0]?.url) {
+      audioUrl = message.attachments[0].url;
+      console.log('✅ Found audio URL in attachments[0].url');
+    }
+    // Method 2: Attachment as string
+    else if (typeof message.attachments?.[0] === 'string') {
+      audioUrl = message.attachments[0];
+      console.log('✅ Found audio URL as string in attachments[0]');
+    }
+    // Method 3: Check meta.recording_url (some HighLevel versions)
+    else if (message.meta?.recording_url) {
+      audioUrl = message.meta.recording_url;
+      console.log('✅ Found audio URL in meta.recording_url');
+    }
+    // Method 4: Check meta.call.recording_url
+    else if (message.meta?.call?.recording_url) {
+      audioUrl = message.meta.call.recording_url;
+      console.log('✅ Found audio URL in meta.call.recording_url');
+    }
 
     if (!audioUrl) {
-      console.log('❌ No audio URL found in attachments');
+      console.log('❌ No audio URL found in any location');
+      console.log('Available fields:', Object.keys(message));
+      console.log('Meta fields:', message.meta ? Object.keys(message.meta) : 'No meta');
+
       return NextResponse.json(
         {
           error: 'No audio recording found',
-          details: 'The message does not have a recording URL in attachments. Please ensure call recording is enabled in HighLevel settings.',
-          messageData: message
+          details: 'The message does not have a recording URL in attachments. This could mean:\n\n' +
+                   '1. Call recording is not enabled in HighLevel settings\n' +
+                   '2. The recording is still processing (wait 30-60 seconds after call ends)\n' +
+                   '3. The call was too short to generate a recording\n\n' +
+                   'Please check your HighLevel settings and try again in a minute.',
+          debug: {
+            messageId,
+            messageType: message.messageType || message.type,
+            hasAttachments: !!message.attachments,
+            attachmentsLength: message.attachments?.length || 0,
+            hasMeta: !!message.meta,
+            availableFields: Object.keys(message)
+          }
         },
         { status: 404 }
       );
