@@ -763,29 +763,43 @@ function ChatTab({ transcript, contactName }: { transcript: Transcript, contactN
     }
   }, [history]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!query.trim()) return;
-    
+
     const userQuery = query;
     setHistory(prev => [...prev, { role: 'user', text: userQuery }]);
     setQuery('');
     setIsTyping(true);
 
-    // SIMULATE AI RESPONSE
-    setTimeout(() => {
-      let response = "I'm sorry, I couldn't find that in the transcript.";
-      const q = userQuery.toLowerCase();
-      if (q.includes('price') || q.includes('cost')) {
-        response = "The contact asked for a pricing PDF. The agent mentioned standard onboarding is 2 weeks, but didn't quote a specific dollar amount in this clip.";
-      } else if (q.includes('timeline') || q.includes('when')) {
-        response = "The agent stated standard onboarding is 2 weeks, but can be expedited to 5 days if signed by Friday.";
-      } else if (q.includes('objection') || q.includes('concern')) {
-        response = "The main concern was urgency—their current contract expires next month, so they need a fast implementation.";
+    try {
+      // Call the real AI API
+      const response = await fetch('/api/ask-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messageId: transcript.message_id,
+          question: userQuery,
+          conversationHistory: history
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get AI response');
       }
-      
-      setHistory(prev => [...prev, { role: 'ai', text: response }]);
+
+      const data = await response.json();
+      setHistory(prev => [...prev, { role: 'ai', text: data.answer }]);
+    } catch (error) {
+      console.error('Error asking AI:', error);
+      setHistory(prev => [...prev, {
+        role: 'ai',
+        text: "I'm sorry, I encountered an error while analyzing the transcript. Please try again."
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   return (

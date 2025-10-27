@@ -86,17 +86,18 @@ export async function POST(request: NextRequest) {
     console.log('🔗 Webhook URL:', webhookUrl);
 
     // Step 1: Submit audio for transcription with webhook using SDK
+    // NOTE: We only use AssemblyAI for transcription + speaker labels
+    // All AI analysis (summary, sentiment, etc.) is done with Gemini API for cost savings
     const transcript = await client.transcripts.submit({
       audio: audioUrl,
       webhook_url: webhookUrl,
       speaker_labels: true,
       speakers_expected: 2,
-      sentiment_analysis: true,
-      auto_highlights: true,
-      entity_detection: true,
-      summarization: true,
-      summary_model: 'informative',
-      summary_type: 'bullets'
+      // Disabled expensive features - using Gemini instead:
+      // sentiment_analysis: false,
+      // auto_highlights: false,
+      // entity_detection: false,
+      // summarization: false
     });
 
     const transcriptId = transcript.id;

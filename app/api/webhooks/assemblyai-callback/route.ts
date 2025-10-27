@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveTranscript } from '@/lib/db';
+import { analyzeTranscript } from '@/lib/gemini';
 
 /**
  * Webhook endpoint for AssemblyAI transcription completion callbacks
@@ -155,30 +156,19 @@ export async function POST(request: NextRequest) {
       end_ms: utterance.end
     }));
 
-    // Calculate overall sentiment
-    const sentimentResults = transcript.sentiment_analysis_results || [];
-    const sentimentCounts = { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 };
-    sentimentResults.forEach(result => {
-      sentimentCounts[result.sentiment]++;
-    });
-    
-    const overallSentiment = 
-      sentimentCounts.POSITIVE > sentimentCounts.NEGATIVE ? 'POSITIVE' :
-      sentimentCounts.NEGATIVE > sentimentCounts.POSITIVE ? 'NEGATIVE' : 'NEUTRAL';
-    
-    const sentimentScore = Math.round(
-      (sentimentCounts.POSITIVE / Math.max(sentimentResults.length, 1)) * 100
+    // Use Gemini API for AI analysis (cheaper than AssemblyAI's features)
+    console.log('🤖 Analyzing transcript with Gemini AI...');
+    const analysis = await analyzeTranscript(
+      transcript.text || '',
+      speakers
     );
 
-    // Extract action items from highlights
-    const actionItems = (transcript.auto_highlights_result?.results || [])
-      .slice(0, 5)
-      .map(highlight => highlight.text);
-
-    // Generate summary from chapters or use the text
-    const summary = transcript.chapters && transcript.chapters.length > 0
-      ? transcript.chapters.map(ch => ch.summary).join(' ')
-      : transcript.text?.substring(0, 500) || 'No summary available';
+    console.log('✅ Gemini analysis complete:', {
+      sentiment: analysis.sentiment,
+      sentiment_score: analysis.sentiment_score,
+      action_items_count: analysis.action_items.length,
+      summary_length: analysis.summary.length
+    });
 
     // Find the existing transcript in our DB to get contact_id and message_id
     const allTranscripts = await import('@/lib/db').then(m => m.getAllTranscripts());
@@ -194,17 +184,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Update the transcript with completed data
+    // Update the transcript with completed data (using Gemini analysis)
     const updatedTranscript = {
       id: transcript_id,
       contact_id: existingTranscript.contact_id,
       message_id: existingTranscript.message_id,
       created_at: existingTranscript.created_at,
       duration_seconds: Math.round((transcript.audio_duration || 0) / 1000),
-      sentiment: overallSentiment as 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE',
-      sentiment_score: sentimentScore,
-      summary,
-      action_items: actionItems,
+      sentiment: analysis.sentiment,
+      sentiment_score: analysis.sentiment_score,
+      summary: analysis.summary,
+      action_items: analysis.action_items,
       full_text: transcript.text || '',
       speakers,
       audio_url: existingTranscript.audio_url,
