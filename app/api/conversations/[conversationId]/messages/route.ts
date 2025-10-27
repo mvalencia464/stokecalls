@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { conversationId: string } }
+  context: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const accessToken = process.env.GHL_ACCESS_TOKEN;
-    const conversationId = params.conversationId;
+    const { conversationId } = await context.params;
 
     if (!accessToken) {
       return NextResponse.json(
