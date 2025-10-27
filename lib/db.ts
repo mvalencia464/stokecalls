@@ -1,10 +1,4 @@
-import fs from 'fs/promises';
-import path from 'path';
-
-// Always use /tmp for now since we're deployed on Netlify (serverless)
-// TODO: Replace with a proper database (Supabase, PostgreSQL, etc.)
-const DB_DIR = '/tmp/data';
-const TRANSCRIPTS_FILE = path.join(DB_DIR, 'transcripts.json');
+import { supabase } from './supabase';
 
 export type Sentiment = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
 
@@ -31,90 +25,113 @@ export interface Transcript {
   status: 'processing' | 'completed' | 'failed';
 }
 
-// Ensure data directory exists
-async function ensureDataDir() {
-  try {
-    await fs.access(DB_DIR);
-  } catch {
-    await fs.mkdir(DB_DIR, { recursive: true });
-  }
-}
-
-// Ensure transcripts file exists
-async function ensureTranscriptsFile() {
-  await ensureDataDir();
-  try {
-    await fs.access(TRANSCRIPTS_FILE);
-  } catch {
-    await fs.writeFile(TRANSCRIPTS_FILE, JSON.stringify([], null, 2));
-  }
-}
-
 // Read all transcripts
 export async function getAllTranscripts(): Promise<Transcript[]> {
-  await ensureTranscriptsFile();
-  const data = await fs.readFile(TRANSCRIPTS_FILE, 'utf-8');
-  return JSON.parse(data);
+  const { data, error } = await supabase
+    .from('transcripts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching transcripts:', error);
+    throw error;
+  }
+
+  return data || [];
 }
 
 // Get transcripts by contact ID
 export async function getTranscriptsByContactId(contactId: string): Promise<Transcript[]> {
-  const transcripts = await getAllTranscripts();
-  return transcripts.filter(t => t.contact_id === contactId);
+  const { data, error } = await supabase
+    .from('transcripts')
+    .select('*')
+    .eq('contact_id', contactId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching transcripts by contact ID:', error);
+    throw error;
+  }
+
+  return data || [];
 }
 
 // Get transcript by message ID
 export async function getTranscriptByMessageId(messageId: string): Promise<Transcript | null> {
-  const transcripts = await getAllTranscripts();
-  return transcripts.find(t => t.message_id === messageId) || null;
+  const { data, error } = await supabase
+    .from('transcripts')
+    .select('*')
+    .eq('message_id', messageId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // No rows returned
+      return null;
+    }
+    console.error('Error fetching transcript by message ID:', error);
+    throw error;
+  }
+
+  return data;
 }
 
-// Save a new transcript
+// Save a new transcript (insert or update)
 export async function saveTranscript(transcript: Transcript): Promise<Transcript> {
-  const transcripts = await getAllTranscripts();
-  
-  // Check if transcript with this message_id already exists
-  const existingIndex = transcripts.findIndex(t => t.message_id === transcript.message_id);
-  
-  if (existingIndex >= 0) {
-    // Update existing transcript
-    transcripts[existingIndex] = transcript;
-  } else {
-    // Add new transcript
-    transcripts.push(transcript);
+  // Try to upsert (insert or update if exists)
+  const { data, error } = await supabase
+    .from('transcripts')
+    .upsert(transcript, {
+      onConflict: 'message_id',
+      ignoreDuplicates: false
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error saving transcript:', error);
+    throw error;
   }
-  
-  // Sort by created_at descending (newest first)
-  transcripts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  
-  await fs.writeFile(TRANSCRIPTS_FILE, JSON.stringify(transcripts, null, 2));
-  return transcript;
+
+  return data;
 }
 
 // Update transcript status
 export async function updateTranscriptStatus(
-  messageId: string, 
+  messageId: string,
   status: 'processing' | 'completed' | 'failed'
 ): Promise<Transcript | null> {
-  const transcripts = await getAllTranscripts();
-  const index = transcripts.findIndex(t => t.message_id === messageId);
-  
-  if (index === -1) return null;
-  
-  transcripts[index].status = status;
-  await fs.writeFile(TRANSCRIPTS_FILE, JSON.stringify(transcripts, null, 2));
-  
-  return transcripts[index];
+  const { data, error } = await supabase
+    .from('transcripts')
+    .update({ status })
+    .eq('message_id', messageId)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // No rows returned
+      return null;
+    }
+    console.error('Error updating transcript status:', error);
+    throw error;
+  }
+
+  return data;
 }
 
 // Delete a transcript
 export async function deleteTranscript(messageId: string): Promise<boolean> {
-  const transcripts = await getAllTranscripts();
-  const filtered = transcripts.filter(t => t.message_id !== messageId);
-  
-  if (filtered.length === transcripts.length) return false;
-  
-  await fs.writeFile(TRANSCRIPTS_FILE, JSON.stringify(filtered, null, 2));
+  const { error } = await supabase
+    .from('transcripts')
+    .delete()
+    .eq('message_id', messageId);
+
+  if (error) {
+    console.error('Error deleting transcript:', error);
+    return false;
+  }
+
   return true;
 }
 
