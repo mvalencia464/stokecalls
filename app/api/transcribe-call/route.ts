@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Fetching call recording for message:', messageId);
 
-    // Step 1: Fetch the message to get the audio URL
+    // Step 1: Get message metadata to get locationId
     const messageResponse = await fetch(
       `https://services.leadconnectorhq.com/conversations/messages/${messageId}`,
       {
@@ -52,72 +52,82 @@ export async function POST(request: NextRequest) {
     }
 
     const messageData = await messageResponse.json();
-
-    console.log('=== TRANSCRIBE CALL DEBUG ===');
-    console.log('Message ID:', messageId);
-    console.log('Message Type:', messageData.message?.messageType || messageData.messageType);
-    console.log('Attachments:', messageData.message?.attachments || messageData.attachments);
-    console.log('Full message data:', JSON.stringify(messageData, null, 2));
-
-    // Handle nested message structure
     const message = messageData.message || messageData;
+    const locationId = message.locationId;
 
-    // Try multiple ways to get the audio URL
-    let audioUrl = null;
-
-    // Method 1: Direct attachment URL
-    if (message.attachments?.[0]?.url) {
-      audioUrl = message.attachments[0].url;
-      console.log('✅ Found audio URL in attachments[0].url');
-    }
-    // Method 2: Attachment as string
-    else if (typeof message.attachments?.[0] === 'string') {
-      audioUrl = message.attachments[0];
-      console.log('✅ Found audio URL as string in attachments[0]');
-    }
-    // Method 3: Check meta.recording_url (some HighLevel versions)
-    else if (message.meta?.recording_url) {
-      audioUrl = message.meta.recording_url;
-      console.log('✅ Found audio URL in meta.recording_url');
-    }
-    // Method 4: Check meta.call.recording_url
-    else if (message.meta?.call?.recording_url) {
-      audioUrl = message.meta.call.recording_url;
-      console.log('✅ Found audio URL in meta.call.recording_url');
+    if (!locationId) {
+      return NextResponse.json(
+        { error: 'No locationId found in message' },
+        { status: 400 }
+      );
     }
 
-    if (!audioUrl) {
-      console.log('❌ No audio URL found in any location');
-      console.log('Available fields:', Object.keys(message));
-      console.log('Meta fields:', message.meta ? Object.keys(message.meta) : 'No meta');
+    console.log('✅ Found locationId:', locationId);
 
+    // Step 2: Download the audio file from HighLevel
+    console.log('📥 Downloading audio from HighLevel...');
+    const recordingResponse = await fetch(
+      `https://services.leadconnectorhq.com/conversations/messages/${messageId}/locations/${locationId}/recording`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Version': '2021-07-28'
+        }
+      }
+    );
+
+    if (!recordingResponse.ok) {
+      const errorText = await recordingResponse.text();
+      console.error('Failed to fetch recording:', recordingResponse.status, errorText);
       return NextResponse.json(
         {
           error: 'No audio recording found',
-          details: 'The message does not have a recording URL in attachments. This could mean:\n\n' +
+          details: 'The recording could not be downloaded from HighLevel. This could mean:\n\n' +
                    '1. Call recording is not enabled in HighLevel settings\n' +
                    '2. The recording is still processing (wait 30-60 seconds after call ends)\n' +
                    '3. The call was too short to generate a recording\n\n' +
                    'Please check your HighLevel settings and try again in a minute.',
           debug: {
             messageId,
-            messageType: message.messageType || message.type,
-            hasAttachments: !!message.attachments,
-            attachmentsLength: message.attachments?.length || 0,
-            hasMeta: !!message.meta,
-            availableFields: Object.keys(message)
+            locationId,
+            status: recordingResponse.status
           }
         },
         { status: 404 }
       );
     }
 
-    console.log('✅ Found audio URL:', audioUrl);
+    // Get the audio file as a buffer
+    const audioBuffer = await recordingResponse.arrayBuffer();
+    console.log('✅ Downloaded audio file:', audioBuffer.byteLength, 'bytes');
 
-    // Step 2: Send to our transcription endpoint
+    // Step 3: Upload to AssemblyAI
+    console.log('📤 Uploading to AssemblyAI...');
+    const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
+      method: 'POST',
+      headers: {
+        'authorization': assemblyAIKey,
+        'content-type': 'application/octet-stream'
+      },
+      body: audioBuffer
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('AssemblyAI upload failed:', uploadResponse.status, errorText);
+      return NextResponse.json(
+        { error: 'Failed to upload audio to AssemblyAI', details: errorText },
+        { status: uploadResponse.status }
+      );
+    }
+
+    const uploadData = await uploadResponse.json();
+    const audioUrl = uploadData.upload_url;
+    console.log('✅ Uploaded to AssemblyAI:', audioUrl);
+
+    // Step 4: Send to our transcription endpoint
     const baseUrl = request.nextUrl.origin;
     console.log('📤 Sending to transcription endpoint:', `${baseUrl}/api/transcribe`);
-    console.log('📤 Payload:', { audioUrl, contactId, messageId });
 
     const transcribeResponse = await fetch(`${baseUrl}/api/transcribe`, {
       method: 'POST',
@@ -145,9 +155,7 @@ export async function POST(request: NextRequest) {
     const transcriptData = await transcribeResponse.json();
     console.log('✅ Transcription successful:', transcriptData);
 
-    console.log('Transcription completed successfully');
-
-    // Step 3: Save transcript to database
+    // Step 5: Save transcript to database
     const savedTranscript = await saveTranscript({
       ...transcriptData,
       audio_url: audioUrl,
