@@ -11,6 +11,7 @@ import { twMerge } from 'tailwind-merge';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/lib/auth-context';
 import { authenticatedFetch } from '@/lib/api-client';
+import Link from 'next/link';
 
 /**
  * --- STOKE LEADS TECHNICAL SPECIFICATION (PROTOTYPE NOTES) ---
@@ -270,6 +271,13 @@ export default function StokeLeadsDashboard() {
           </button>
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-600 hidden md:block">{user?.email}</span>
+            <Link
+              href="/settings"
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </Link>
             <button
               onClick={() => signOut()}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"

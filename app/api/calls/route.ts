@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { getClientSettings } from '@/lib/client-settings';
 
 /**
  * GET /api/calls
@@ -19,15 +20,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const accessToken = process.env.GHL_ACCESS_TOKEN;
+    // Get user's client settings
+    const settings = await getClientSettings(auth.user.id);
+
+    if (!settings) {
+      return NextResponse.json(
+        { error: 'Please configure your HighLevel credentials in Settings first.' },
+        { status: 400 }
+      );
+    }
+
+    const accessToken = settings.ghl_access_token;
     const { searchParams } = new URL(request.url);
     const contactId = searchParams.get('contactId');
-
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'Missing HighLevel credentials. Please check your .env.local file.' },
-        { status: 500 }
-      );
     }
 
     if (!contactId) {

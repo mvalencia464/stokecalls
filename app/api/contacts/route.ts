@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { getClientSettings } from '@/lib/client-settings';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,15 +13,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const locationId = process.env.NEXT_PUBLIC_GHL_LOCATION_ID;
-    const accessToken = process.env.GHL_ACCESS_TOKEN;
+    // Get user's client settings
+    const settings = await getClientSettings(auth.user.id);
 
-    if (!locationId || !accessToken) {
+    if (!settings) {
       return NextResponse.json(
-        { error: 'Missing HighLevel credentials. Please check your .env.local file.' },
-        { status: 500 }
+        { error: 'Please configure your HighLevel credentials in Settings first.' },
+        { status: 400 }
       );
     }
+
+    const locationId = settings.ghl_location_id;
+    const accessToken = settings.ghl_access_token;
 
     // Fetch contacts from HighLevel API
     const response = await fetch(
