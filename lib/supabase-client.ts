@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Client-side Supabase client for authentication
 // Uses the anon key (safe to expose in browser)
-export const createBrowserClient = () => {
+export const createBrowserClient = (): SupabaseClient => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -20,17 +20,17 @@ export const createBrowserClient = () => {
 };
 
 // Singleton instance for browser
-let browserClient: ReturnType<typeof createClient> | null = null;
+let browserClient: SupabaseClient | null = null;
 
-export const getSupabaseBrowser = () => {
+export const getSupabaseBrowser = (): SupabaseClient => {
   if (typeof window === 'undefined') {
     throw new Error('getSupabaseBrowser can only be called in the browser');
   }
-  
+
   if (!browserClient) {
     browserClient = createBrowserClient();
   }
-  
+
   return browserClient;
 };
 
