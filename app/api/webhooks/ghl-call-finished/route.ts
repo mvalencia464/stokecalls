@@ -72,24 +72,53 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Find the user with this locationId
-    const { data: settings, error: settingsError } = await supabase
-      .from('client_settings')
-      .select('*')
-      .eq('ghl_location_id', locationId)
-      .single();
-
-    if (settingsError || !settings) {
-      console.error('❌ Could not find user settings for locationId:', locationId, settingsError);
+    let supabase;
+    try {
+      supabase = createClient(supabaseUrl, supabaseServiceKey);
+      console.log('✅ Supabase client created');
+    } catch (error) {
+      console.error('❌ Failed to create Supabase client:', error);
       return NextResponse.json({
         success: false,
-        error: 'No user found for this location. Please ensure your HighLevel Location ID is configured in Settings.'
-      }, { status: 404 });
+        error: 'Failed to initialize database connection',
+        details: error instanceof Error ? error.message : String(error)
+      }, { status: 500 });
     }
 
-    console.log('✅ Found user settings for location');
+    // Find the user with this locationId
+    let settings;
+    try {
+      const { data, error: settingsError } = await supabase
+        .from('client_settings')
+        .select('*')
+        .eq('ghl_location_id', locationId)
+        .single();
+
+      if (settingsError) {
+        console.error('❌ Supabase query error:', settingsError);
+        throw settingsError;
+      }
+
+      settings = data;
+
+      if (!settings) {
+        console.error('❌ No settings found for locationId:', locationId);
+        return NextResponse.json({
+          success: false,
+          error: 'No user found for this location. Please ensure your HighLevel Location ID is configured in Settings.',
+          locationId
+        }, { status: 404 });
+      }
+
+      console.log('✅ Found user settings for location');
+    } catch (error) {
+      console.error('❌ Database query failed:', error);
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to query user settings',
+        details: error instanceof Error ? error.message : String(error)
+      }, { status: 500 });
+    }
 
     // If we don't have a messageId, fetch the latest call recording for this contact
     if (!messageId) {
@@ -219,17 +248,31 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('❌ Webhook error:', error);
     console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    console.error('❌ Error details:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
-      type: typeof error
-    });
+
+    let errorMessage = 'Unknown error';
+    let errorDetails: any = {};
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      errorDetails = {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      };
+    } else if (typeof error === 'object' && error !== null) {
+      errorMessage = JSON.stringify(error);
+      errorDetails = error;
+    } else {
+      errorMessage = String(error);
+    }
+
+    console.error('❌ Error details:', errorDetails);
 
     return NextResponse.json(
       {
         error: 'Failed to process webhook',
-        details: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
+        message: errorMessage,
+        details: errorDetails
       },
       { status: 500 }
     );
