@@ -31,23 +31,29 @@ export async function POST(request: NextRequest) {
 
     // Extract fields - HighLevel might send them in different formats
     const contactId = body.contactId || body.contact_id || body.contact?.id;
-    const messageId = body.messageId || body.message_id || body.message?.id || body.id;
+    let messageId = body.messageId || body.message_id || body.message?.id || body.id;
     const locationId = body.locationId || body.location_id || body.location?.id;
     const type = body.type || 'CallFinished'; // Default to CallFinished if not provided
 
     console.log('📋 Extracted fields:', { contactId, messageId, locationId, type });
 
-    // Validate required fields (we need at least contactId and messageId)
-    if (!contactId || !messageId) {
-      console.error('❌ Missing required fields:', { contactId, messageId, body });
+    // Validate required fields (we need at least contactId and locationId)
+    if (!contactId || !locationId) {
+      console.error('❌ Missing required fields:', { contactId, locationId, body });
       return NextResponse.json(
         {
-          error: 'Missing required fields: contactId and messageId',
-          received: { contactId, messageId },
+          error: 'Missing required fields: contactId and locationId',
+          received: { contactId, locationId },
           fullPayload: body
         },
         { status: 400 }
       );
+    }
+
+    // If messageId is missing, we'll need to fetch it from HighLevel
+    // This happens when using "Call Finished" trigger instead of "Message Received"
+    if (!messageId) {
+      console.log('⚠️ messageId not in webhook payload, will fetch from HighLevel after getting user settings');
     }
     
     console.log(`✅ Processing call for contact ${contactId}, message ${messageId}`);
@@ -104,6 +110,65 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('✅ Found user settings for location');
+
+    // If we don't have a messageId, fetch the latest call recording for this contact
+    if (!messageId) {
+      console.log('🔍 Fetching latest call recording for contact:', contactId);
+
+      try {
+        const messagesResponse = await fetch(
+          `https://services.leadconnectorhq.com/conversations/search?contactId=${contactId}&type=Call`,
+          {
+            headers: {
+              'Authorization': `Bearer ${settings.ghl_access_token}`,
+              'Version': '2021-07-28',
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json();
+          console.log('📧 Messages response:', JSON.stringify(messagesData, null, 2));
+
+          // Get the most recent call message
+          const conversations = messagesData.conversations || [];
+          if (conversations.length > 0) {
+            // Sort by date and get the most recent
+            const sortedConversations = conversations.sort((a: any, b: any) => {
+              return new Date(b.lastMessageDate || b.dateAdded).getTime() -
+                     new Date(a.lastMessageDate || a.dateAdded).getTime();
+            });
+
+            const latestConversation = sortedConversations[0];
+            messageId = latestConversation.lastMessageId || latestConversation.id;
+            console.log('✅ Found latest call message ID:', messageId);
+          } else {
+            console.error('❌ No call messages found for contact');
+            return NextResponse.json({
+              success: false,
+              error: 'No call recordings found for this contact. The recording may not be ready yet.'
+            }, { status: 404 });
+          }
+        } else {
+          const errorText = await messagesResponse.text();
+          console.error('❌ Failed to fetch messages:', messagesResponse.status, errorText);
+          return NextResponse.json({
+            success: false,
+            error: 'Failed to fetch call recordings from HighLevel'
+          }, { status: 500 });
+        }
+      } catch (error) {
+        console.error('❌ Error fetching messages:', error);
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to fetch call recordings'
+        }, { status: 500 });
+      }
+    }
+
+    // Now we should have a messageId
+    console.log('📝 Final messageId:', messageId);
 
     // Trigger transcription in the background (non-blocking)
     const baseUrl = request.nextUrl.origin;
