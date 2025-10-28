@@ -414,6 +414,9 @@ function ContactDetailView({ contact, onBack }: { contact: Contact, onBack: () =
   const [loadingTranscripts, setLoadingTranscripts] = useState(true);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
 
+  // Multi-select state: array of selected transcript message_ids
+  const [selectedTranscriptIds, setSelectedTranscriptIds] = useState<string[]>([]);
+
   // Function to refresh transcripts (can be called after manual transcription)
   const refreshTranscripts = async () => {
     try {
@@ -457,8 +460,45 @@ function ContactDetailView({ contact, onBack }: { contact: Contact, onBack: () =
     fetchTranscripts();
   }, [contact.id]);
 
-  // Just use the newest transcript for detail view
-  const activeTranscript = transcripts[0];
+  // Auto-select the most recent transcript when transcripts load
+  useEffect(() => {
+    if (transcripts.length > 0 && selectedTranscriptIds.length === 0) {
+      setSelectedTranscriptIds([transcripts[0].message_id]);
+    }
+  }, [transcripts, selectedTranscriptIds.length]);
+
+  // Get selected transcripts
+  const selectedTranscripts = transcripts.filter(t =>
+    selectedTranscriptIds.includes(t.message_id)
+  );
+
+  // For single-transcript features (Ask AI, Re-analyze), use the most recent selected
+  const activeTranscript = selectedTranscripts[0];
+
+  // Toggle transcript selection
+  const toggleTranscriptSelection = (messageId: string) => {
+    setSelectedTranscriptIds(prev => {
+      if (prev.includes(messageId)) {
+        // Don't allow deselecting if it's the only one selected
+        if (prev.length === 1) return prev;
+        return prev.filter(id => id !== messageId);
+      } else {
+        return [...prev, messageId];
+      }
+    });
+  };
+
+  // Select all transcripts
+  const selectAllTranscripts = () => {
+    setSelectedTranscriptIds(transcripts.map(t => t.message_id));
+  };
+
+  // Deselect all except the most recent
+  const deselectAllTranscripts = () => {
+    if (transcripts.length > 0) {
+      setSelectedTranscriptIds([transcripts[0].message_id]);
+    }
+  };
 
   if (loadingTranscripts) {
     return (
@@ -494,10 +534,10 @@ function ContactDetailView({ contact, onBack }: { contact: Contact, onBack: () =
                 <span className="flex items-center gap-1">
                   <Phone className="w-4 h-4" /> {contact.phone}
                 </span>
-                {activeTranscript && (
+                {selectedTranscripts.length > 0 && (
                   <span className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    {format(new Date(activeTranscript.created_at), 'MMM d, yyyy • h:mm a')}
+                    <FileText className="w-4 h-4" />
+                    {selectedTranscripts.length} call{selectedTranscripts.length > 1 ? 's' : ''} selected
                   </span>
                 )}
               </div>
@@ -511,62 +551,104 @@ function ContactDetailView({ contact, onBack }: { contact: Contact, onBack: () =
         </div>
       </div>
 
-      {/* Tabs & Content */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[600px] flex flex-col">
-        <div className="flex border-b border-slate-200 overflow-x-auto">
-          <TabButton 
-            active={activeTab === 'insights'} 
-            onClick={() => setActiveTab('insights')}
-            icon={Sparkles}
-          >
-            AI Insights
-          </TabButton>
-          <TabButton 
-            active={activeTab === 'transcript'} 
-            onClick={() => setActiveTab('transcript')}
-            icon={FileText}
-          >
-            Transcript
-          </TabButton>
-          <TabButton
-            active={activeTab === 'chat'}
-            onClick={() => setActiveTab('chat')}
-            icon={MessageSquare}
-          >
-            Ask AI
-          </TabButton>
-          <TabButton
-            active={activeTab === 'calls'}
-            onClick={() => setActiveTab('calls')}
-            icon={Phone}
-          >
-            Call Recordings
-          </TabButton>
-        </div>
+      {/* Main Content Area with Sidebar */}
+      <div className="flex gap-6">
+        {/* Left Sidebar - Call Sources (NotebookLM style) */}
+        {transcripts.length > 0 && (
+          <div className="w-80 flex-shrink-0">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sticky top-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-900">Call Sources</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={selectAllTranscripts}
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                    disabled={selectedTranscriptIds.length === transcripts.length}
+                  >
+                    All
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    onClick={deselectAllTranscripts}
+                    className="text-xs text-slate-600 hover:text-slate-700 font-medium"
+                    disabled={selectedTranscriptIds.length === 1}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
 
-        <div className="p-6 flex-1 bg-slate-50/50">
-          {activeTab === 'insights' && (
-            activeTranscript ? (
-              <InsightsTab transcript={activeTranscript} />
-            ) : (
-              <NoTranscriptsMessage />
-            )
-          )}
-          {activeTab === 'transcript' && (
-            activeTranscript ? (
-              <TranscriptTab transcript={activeTranscript} />
-            ) : (
-              <NoTranscriptsMessage />
-            )
-          )}
-          {activeTab === 'chat' && (
-            activeTranscript ? (
-              <ChatTab transcript={activeTranscript} contactName={contact.name} />
-            ) : (
-              <NoTranscriptsMessage />
-            )
-          )}
-          {activeTab === 'calls' && <CallsTab contactId={contact.id} onTranscriptionComplete={refreshTranscripts} />}
+              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                {transcripts.map((transcript) => (
+                  <TranscriptSourceCard
+                    key={transcript.message_id}
+                    transcript={transcript}
+                    isSelected={selectedTranscriptIds.includes(transcript.message_id)}
+                    onToggle={() => toggleTranscriptSelection(transcript.message_id)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Right Content Area - Tabs */}
+        <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[600px] flex flex-col">
+          <div className="flex border-b border-slate-200 overflow-x-auto">
+            <TabButton
+              active={activeTab === 'insights'}
+              onClick={() => setActiveTab('insights')}
+              icon={Sparkles}
+            >
+              AI Insights
+            </TabButton>
+            <TabButton
+              active={activeTab === 'transcript'}
+              onClick={() => setActiveTab('transcript')}
+              icon={FileText}
+            >
+              Transcript
+            </TabButton>
+            <TabButton
+              active={activeTab === 'chat'}
+              onClick={() => setActiveTab('chat')}
+              icon={MessageSquare}
+            >
+              Ask AI
+            </TabButton>
+            <TabButton
+              active={activeTab === 'calls'}
+              onClick={() => setActiveTab('calls')}
+              icon={Phone}
+            >
+              Call Recordings
+            </TabButton>
+          </div>
+
+          <div className="p-6 flex-1 bg-slate-50/50">
+            {activeTab === 'insights' && (
+              selectedTranscripts.length > 0 ? (
+                <InsightsTab transcripts={selectedTranscripts} />
+              ) : (
+                <NoTranscriptsMessage />
+              )
+            )}
+            {activeTab === 'transcript' && (
+              selectedTranscripts.length > 0 ? (
+                <TranscriptTab transcripts={selectedTranscripts} />
+              ) : (
+                <NoTranscriptsMessage />
+              )
+            )}
+            {activeTab === 'chat' && (
+              activeTranscript ? (
+                <ChatTab transcript={activeTranscript} contactName={contact.name} />
+              ) : (
+                <NoTranscriptsMessage />
+              )
+            )}
+            {activeTab === 'calls' && <CallsTab contactId={contact.id} onTranscriptionComplete={refreshTranscripts} />}
+          </div>
         </div>
       </div>
     </div>
@@ -589,7 +671,27 @@ function NoTranscriptsMessage() {
   );
 }
 
-function InsightsTab({ transcript }: { transcript: Transcript }) {
+function InsightsTab({ transcripts }: { transcripts: Transcript[] }) {
+  // Combine insights from all selected transcripts
+  const combinedSummary = transcripts.length === 1
+    ? transcripts[0].summary
+    : `Analysis of ${transcripts.length} calls:\n\n` + transcripts
+        .map((t, idx) => `Call ${idx + 1} (${format(new Date(t.created_at), 'MMM d, h:mm a')}): ${t.summary}`)
+        .join('\n\n');
+
+  const combinedActionItems = transcripts.flatMap(t => t.action_items);
+
+  const avgSentimentScore = Math.round(
+    transcripts.reduce((sum, t) => sum + t.sentiment_score, 0) / transcripts.length
+  );
+
+  const overallSentiment: Sentiment =
+    avgSentimentScore >= 70 ? 'POSITIVE' :
+    avgSentimentScore <= 40 ? 'NEGATIVE' :
+    'NEUTRAL';
+
+  const totalDuration = transcripts.reduce((sum, t) => sum + t.duration_seconds, 0);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Summary Card */}
@@ -598,9 +700,14 @@ function InsightsTab({ transcript }: { transcript: Transcript }) {
           <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600" />
             Executive Summary
+            {transcripts.length > 1 && (
+              <span className="text-xs font-normal text-slate-500">
+                ({transcripts.length} calls)
+              </span>
+            )}
           </h3>
-          <p className="text-slate-700 leading-relaxed">
-            {transcript.summary}
+          <p className="text-slate-700 leading-relaxed whitespace-pre-line">
+            {combinedSummary}
           </p>
         </div>
 
@@ -608,19 +715,28 @@ function InsightsTab({ transcript }: { transcript: Transcript }) {
           <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             Action Items
+            {transcripts.length > 1 && (
+              <span className="text-xs font-normal text-slate-500">
+                (from {transcripts.length} calls)
+              </span>
+            )}
           </h3>
-          <ul className="space-y-3">
-            {transcript.action_items.map((item, idx) => (
-              <li key={idx} className="flex items-start gap-3">
-                <input 
-                  type="checkbox" 
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-not-allowed"
-                  disabled
-                />
-                <span className="text-slate-700">{item}</span>
-              </li>
-            ))}
-          </ul>
+          {combinedActionItems.length > 0 ? (
+            <ul className="space-y-3">
+              {combinedActionItems.map((item, idx) => (
+                <li key={idx} className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-not-allowed"
+                    disabled
+                  />
+                  <span className="text-slate-700">{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No action items identified</p>
+          )}
         </div>
       </div>
 
@@ -628,44 +744,54 @@ function InsightsTab({ transcript }: { transcript: Transcript }) {
       <div className="space-y-6">
          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-lg font-semibold text-slate-900 mb-6">Call Vitals</h3>
-          
+
           <div className="space-y-6">
             <div>
-              <div className="text-sm text-slate-500 mb-1 font-medium uppercase tracking-wider">Overall Sentiment</div>
+              <div className="text-sm text-slate-500 mb-1 font-medium uppercase tracking-wider">
+                {transcripts.length > 1 ? 'Average Sentiment' : 'Overall Sentiment'}
+              </div>
               <div className="flex items-center justify-between">
-                <SentimentBadge sentiment={transcript.sentiment} />
-                <span className="font-bold text-2xl text-slate-900">{transcript.sentiment_score}/100</span>
+                <SentimentBadge sentiment={overallSentiment} />
+                <span className="font-bold text-2xl text-slate-900">{avgSentimentScore}/100</span>
               </div>
               <div className="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div 
-                  className={cn("h-full rounded-full", 
-                    transcript.sentiment === 'POSITIVE' ? 'bg-emerald-500' : 
-                    transcript.sentiment === 'NEGATIVE' ? 'bg-rose-500' : 'bg-slate-400'
+                <div
+                  className={cn("h-full rounded-full",
+                    overallSentiment === 'POSITIVE' ? 'bg-emerald-500' :
+                    overallSentiment === 'NEGATIVE' ? 'bg-rose-500' : 'bg-slate-400'
                   )}
-                  style={{ width: `${transcript.sentiment_score}%` }}
+                  style={{ width: `${avgSentimentScore}%` }}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
               <div>
-                <div className="text-sm text-slate-500 mb-1">Duration</div>
+                <div className="text-sm text-slate-500 mb-1">
+                  {transcripts.length > 1 ? 'Total Duration' : 'Duration'}
+                </div>
                 <div className="font-semibold text-slate-900">
-                  {Math.floor(transcript.duration_seconds / 60)}m {transcript.duration_seconds % 60}s
+                  {Math.floor(totalDuration / 60)}m {totalDuration % 60}s
                 </div>
               </div>
               <div>
-                <div className="text-sm text-slate-500 mb-1">Speakers</div>
-                <div className="font-semibold text-slate-900">2 Detected</div>
+                <div className="text-sm text-slate-500 mb-1">
+                  {transcripts.length > 1 ? 'Calls' : 'Speakers'}
+                </div>
+                <div className="font-semibold text-slate-900">
+                  {transcripts.length > 1 ? `${transcripts.length} Selected` : '2 Detected'}
+                </div>
               </div>
             </div>
           </div>
         </div>
-        
+
         <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-start gap-3">
-          <Sparkles className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+          <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
           <p className="text-sm text-indigo-900">
-            <strong>Pro Tip:</strong> This call had a highly positive sentiment spike during the discussion of "automated workflows". Consider emphasizing this feature in follow-up materials.
+            <strong>Pro Tip:</strong> {transcripts.length > 1
+              ? `You're viewing combined insights from ${transcripts.length} calls. Deselect calls from the sidebar to focus on specific conversations.`
+              : 'Select multiple calls from the sidebar to get combined insights across conversations.'}
           </p>
         </div>
       </div>
@@ -673,10 +799,25 @@ function InsightsTab({ transcript }: { transcript: Transcript }) {
   );
 }
 
-function TranscriptTab({ transcript }: { transcript: Transcript }) {
+function TranscriptTab({ transcripts }: { transcripts: Transcript[] }) {
   const [search, setSearch] = useState('');
 
-  const filteredSpeakers = transcript.speakers.filter(s => 
+  // Combine all speakers from all transcripts, sorted by created_at and then start_ms
+  const allSpeakers = transcripts.flatMap((transcript, transcriptIdx) =>
+    transcript.speakers.map(speaker => ({
+      ...speaker,
+      transcriptIdx,
+      transcriptDate: transcript.created_at
+    }))
+  ).sort((a, b) => {
+    // First sort by transcript date
+    const dateCompare = new Date(a.transcriptDate).getTime() - new Date(b.transcriptDate).getTime();
+    if (dateCompare !== 0) return dateCompare;
+    // Then by start time within the same transcript
+    return a.start_ms - b.start_ms;
+  });
+
+  const filteredSpeakers = allSpeakers.filter(s =>
     s.text.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -686,60 +827,78 @@ function TranscriptTab({ transcript }: { transcript: Transcript }) {
       <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10 rounded-t-xl">
         <div className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Search transcript text..." 
+          <input
+            type="text"
+            placeholder="Search transcript text..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full text-sm"
           />
         </div>
         <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-colors" title="Download Text">
-            <FileText className="w-5 h-5" />
-          </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
-            <PlayCircle className="w-4 h-4" /> Play Audio
-          </button>
+          <span className="text-xs text-slate-500">
+            {transcripts.length} call{transcripts.length > 1 ? 's' : ''}
+          </span>
         </div>
       </div>
 
       {/* Transcript Feed */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50">
-        {filteredSpeakers.map((segment, idx) => {
-          const isAgent = segment.speaker === 'A';
-          return (
-            <div key={idx} className={cn("flex gap-4 max-w-3xl", isAgent ? "flex-row-reverse ml-auto" : "mr-auto")}>
-              <div className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium",
-                isAgent ? "bg-indigo-100 text-indigo-700" : "bg-slate-200 text-slate-600"
-              )}>
-                {isAgent ? 'YOU' : 'HC'}
+        {transcripts.map((transcript, transcriptIdx) => (
+          <div key={transcript.message_id} className="space-y-4">
+            {/* Call Header */}
+            {transcripts.length > 1 && (
+              <div className="flex items-center gap-2 py-2 px-4 bg-slate-100 rounded-lg border border-slate-200">
+                <Phone className="w-4 h-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">
+                  Call {transcriptIdx + 1} - {format(new Date(transcript.created_at), 'MMM d, h:mm a')}
+                </span>
+                <span className="text-xs text-slate-500">
+                  ({formatDuration(transcript.duration_seconds * 1000)})
+                </span>
               </div>
-              <div className={cn(
-                "flex-1 space-y-1",
-                isAgent ? "items-end text-right" : ""
-              )}>
-                <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                  <span className="font-medium">
-                    {isAgent ? 'Agent (Speaker A)' : 'Contact (Speaker B)'}
-                  </span>
-                  <span>•</span>
-                  <span className="font-mono">
-                    {formatMs(segment.start_ms)}
-                  </span>
-                </div>
-                <div className={cn(
-                  "p-4 rounded-2xl text-sm leading-relaxed shadow-sm",
-                  isAgent ? "bg-indigo-600 text-white rounded-tr-none" : "bg-white text-slate-800 border border-slate-200 rounded-tl-none"
-                )}>
-                  {highlightText(segment.text, search)}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {filteredSpeakers.length === 0 && (
+            )}
+
+            {/* Transcript segments for this call */}
+            {transcript.speakers
+              .filter(s => !search || s.text.toLowerCase().includes(search.toLowerCase()))
+              .map((segment, idx) => {
+                const isAgent = segment.speaker === 'A';
+                return (
+                  <div key={idx} className={cn("flex gap-4 max-w-3xl", isAgent ? "flex-row-reverse ml-auto" : "mr-auto")}>
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-medium",
+                      isAgent ? "bg-indigo-100 text-indigo-700" : "bg-slate-200 text-slate-600"
+                    )}>
+                      {isAgent ? 'YOU' : 'HC'}
+                    </div>
+                    <div className={cn(
+                      "flex-1 space-y-1",
+                      isAgent ? "items-end text-right" : ""
+                    )}>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                        <span className="font-medium">
+                          {isAgent ? 'Agent (Speaker A)' : 'Contact (Speaker B)'}
+                        </span>
+                        <span>•</span>
+                        <span className="font-mono">
+                          {formatMs(segment.start_ms)}
+                        </span>
+                      </div>
+                      <div className={cn(
+                        "p-4 rounded-2xl text-sm leading-relaxed shadow-sm",
+                        isAgent ? "bg-indigo-600 text-white rounded-tr-none" : "bg-white text-slate-800 border border-slate-200 rounded-tl-none"
+                      )}>
+                        {highlightText(segment.text, search)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        ))}
+
+        {search && filteredSpeakers.length === 0 && (
           <div className="text-center text-slate-500 py-10">
             No transcript segments found matching "{search}"
           </div>
@@ -860,14 +1019,68 @@ function ChatTab({ transcript, contactName }: { transcript: Transcript, contactN
 
 // --- SMALLER COMPONENTS & UTILS ---
 
+function TranscriptSourceCard({ transcript, isSelected, onToggle }: {
+  transcript: Transcript;
+  isSelected: boolean;
+  onToggle: () => void;
+}) {
+  const callDate = format(new Date(transcript.created_at), 'MMM d, h:mm a');
+  const duration = formatDuration(transcript.duration_seconds * 1000);
+
+  return (
+    <button
+      onClick={onToggle}
+      className={cn(
+        "w-full text-left p-3 rounded-lg border-2 transition-all",
+        isSelected
+          ? "border-indigo-500 bg-indigo-50"
+          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <div className={cn(
+          "w-4 h-4 rounded border-2 flex items-center justify-center mt-0.5 shrink-0",
+          isSelected
+            ? "border-indigo-500 bg-indigo-500"
+            : "border-slate-300 bg-white"
+        )}>
+          {isSelected && (
+            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Phone className="w-3 h-3 text-slate-400" />
+            <span className="text-xs font-medium text-slate-900">{callDate}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <span>{duration}</span>
+            <span>•</span>
+            <span className={cn(
+              "capitalize",
+              transcript.sentiment === 'POSITIVE' ? "text-emerald-600" :
+              transcript.sentiment === 'NEGATIVE' ? "text-rose-600" :
+              "text-slate-600"
+            )}>
+              {transcript.sentiment.toLowerCase()}
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function TabButton({ active, onClick, icon: Icon, children }: { active: boolean, onClick: () => void, icon: any, children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
       className={cn(
         "flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
-        active 
-          ? "border-indigo-600 text-indigo-600 bg-indigo-50/50" 
+        active
+          ? "border-indigo-600 text-indigo-600 bg-indigo-50/50"
           : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
       )}
     >
