@@ -48,6 +48,13 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}m ${remainingSeconds}s`;
+}
+
 // --- MOCK DATA ---
 
 type Sentiment = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
