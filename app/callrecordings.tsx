@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Phone, Calendar, BarChart3, ChevronRight, ArrowLeft,
   MessageSquare, FileText, Sparkles, PlayCircle, CheckCircle2,
-  AlertCircle, Clock, RefreshCw, Send, User, Bot, LogOut, Settings
+  AlertCircle, Clock, RefreshCw, Send, User, Bot, LogOut, Settings, Check
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1173,23 +1173,37 @@ function highlightText(text: string, searchTerm: string) {
 // Calls Tab - Show available call recordings and allow manual transcription
 function CallsTab({ contactId, onTranscriptionComplete }: { contactId: string, onTranscriptionComplete: () => void }) {
   const [calls, setCalls] = useState<any[]>([]);
+  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchCalls() {
+    async function fetchCallsAndTranscripts() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`/api/calls?contactId=${contactId}`);
 
-        if (!response.ok) {
+        // Fetch both calls and transcripts in parallel
+        const [callsResponse, transcriptsResponse] = await Promise.all([
+          fetch(`/api/calls?contactId=${contactId}`),
+          fetch(`/api/transcripts?contactId=${contactId}`)
+        ]);
+
+        if (!callsResponse.ok) {
           throw new Error('Failed to fetch calls');
         }
 
-        const data = await response.json();
-        setCalls(data.calls || []);
+        const callsData = await callsResponse.json();
+        setCalls(callsData.calls || []);
+
+        // Transcripts endpoint might not exist yet or might fail, so handle gracefully
+        if (transcriptsResponse.ok) {
+          const transcriptsData = await transcriptsResponse.json();
+          setTranscripts(transcriptsData.transcripts || []);
+        } else {
+          setTranscripts([]);
+        }
       } catch (err) {
         console.error('Error fetching calls:', err);
         setError(err instanceof Error ? err.message : 'Failed to load calls');
@@ -1198,7 +1212,7 @@ function CallsTab({ contactId, onTranscriptionComplete }: { contactId: string, o
       }
     }
 
-    fetchCalls();
+    fetchCallsAndTranscripts();
   }, [contactId]);
 
   const handleTranscribe = async (messageId: string) => {
@@ -1281,66 +1295,118 @@ function CallsTab({ contactId, onTranscriptionComplete }: { contactId: string, o
     );
   }
 
+  // Create a map of message_id -> transcript for quick lookup
+  const transcriptMap = new Map(transcripts.map(t => [t.message_id, t]));
+
+  // Count transcribed vs not transcribed
+  const transcribedCount = calls.filter(call => transcriptMap.has(call.id)).length;
+  const notTranscribedCount = calls.length - transcribedCount;
+
   return (
     <div className="space-y-4">
       <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
         <p className="text-sm text-blue-900">
-          <strong>Found {calls.length} call recording{calls.length !== 1 ? 's' : ''}.</strong> Click "Transcribe" to process any call.
+          <strong>Found {calls.length} call recording{calls.length !== 1 ? 's' : ''}.</strong>
+          {' '}
+          {transcribedCount > 0 && (
+            <span className="text-green-700">
+              {transcribedCount} already transcribed.
+            </span>
+          )}
+          {' '}
+          {notTranscribedCount > 0 && (
+            <span>
+              Click "Transcribe" to process any call.
+            </span>
+          )}
         </p>
       </div>
 
       <div className="space-y-3">
-        {calls.map((call) => (
-          <div key={call.id} className="bg-white border border-slate-200 rounded-lg p-4 flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <Phone className="w-4 h-4 text-slate-500" />
-                <span className="font-medium text-slate-900">
-                  {call.direction === 'inbound' ? 'Incoming Call' : 'Outgoing Call'}
-                </span>
-                <span className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-medium",
-                  call.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'
-                )}>
-                  {call.status}
-                </span>
-                {call.duration && (
-                  <span className="text-xs text-slate-500">
-                    {Math.floor(call.duration / 60)}:{(call.duration % 60).toString().padStart(2, '0')}
-                  </span>
-                )}
-              </div>
-              <div className="text-sm text-slate-600">
-                {format(new Date(call.dateAdded), 'MMM d, yyyy • h:mm a')}
-              </div>
-              {!call.audioUrl && call.status === 'completed' && (
-                <div className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  Recording not available yet. Check HighLevel settings to ensure call recording is enabled.
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => handleTranscribe(call.id)}
-              disabled={transcribingId === call.id}
+        {calls.map((call) => {
+          const transcript = transcriptMap.get(call.id);
+          const isTranscribed = !!transcript;
+
+          return (
+            <div
+              key={call.id}
               className={cn(
-                "px-4 py-2 rounded-lg font-medium text-sm transition-colors",
-                transcribingId === call.id
-                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+                "bg-white border rounded-lg p-4 flex items-center justify-between",
+                isTranscribed ? "border-green-200 bg-green-50/30" : "border-slate-200"
               )}
             >
-              {transcribingId === call.id ? (
-                <span className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Transcribing...
-                </span>
-              ) : (
-                'Transcribe'
-              )}
-            </button>
-          </div>
-        ))}
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <Phone className={cn(
+                    "w-4 h-4",
+                    isTranscribed ? "text-green-600" : "text-slate-500"
+                  )} />
+                  <span className={cn(
+                    "font-medium",
+                    isTranscribed ? "text-green-900" : "text-slate-900"
+                  )}>
+                    {call.direction === 'inbound' ? 'Incoming Call' : 'Outgoing Call'}
+                  </span>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-full text-xs font-medium",
+                    call.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'
+                  )}>
+                    {call.status}
+                  </span>
+                  {call.duration && (
+                    <span className="text-xs text-slate-500">
+                      {Math.floor(call.duration / 60)}:{(call.duration % 60).toString().padStart(2, '0')}
+                    </span>
+                  )}
+                  {isTranscribed && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                      <Check className="w-3 h-3" />
+                      Transcribed
+                    </span>
+                  )}
+                </div>
+                <div className={cn(
+                  "text-sm",
+                  isTranscribed ? "text-green-700" : "text-slate-600"
+                )}>
+                  {format(new Date(call.dateAdded), 'MMM d, yyyy • h:mm a')}
+                </div>
+                {!call.audioUrl && call.status === 'completed' && (
+                  <div className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Recording not available yet. Check HighLevel settings to ensure call recording is enabled.
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => handleTranscribe(call.id)}
+                disabled={transcribingId === call.id || isTranscribed}
+                className={cn(
+                  "px-4 py-2 rounded-lg font-medium text-sm transition-colors",
+                  transcribingId === call.id
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    : isTranscribed
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                )}
+              >
+                {transcribingId === call.id ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Transcribing...
+                  </span>
+                ) : isTranscribed ? (
+                  <span className="flex items-center gap-2">
+                    <Check className="w-4 h-4" />
+                    Already Transcribed
+                  </span>
+                ) : (
+                  'Transcribe'
+                )}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
