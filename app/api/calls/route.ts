@@ -13,9 +13,9 @@ export async function GET(request: NextRequest) {
   try {
     // Require authentication
     const auth = await requireAuth(request);
-    if (!auth.authenticated) {
+    if (!auth.authenticated || !auth.user) {
       return NextResponse.json(
-        { error: auth.error?.message },
+        { error: auth.error?.message || 'Not authenticated' },
         { status: auth.error?.status || 401 }
       );
     }
