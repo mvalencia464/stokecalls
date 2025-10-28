@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveTranscript } from '@/lib/db';
+import { saveTranscript, getTranscriptByMessageId, type Transcript } from '@/lib/db';
 import { analyzeTranscript } from '@/lib/gemini';
+import { getClientSettings } from '@/lib/client-settings';
 
 /**
  * Webhook endpoint for AssemblyAI transcription completion callbacks
@@ -61,6 +62,76 @@ interface AssemblyAITranscript {
   };
   audio_duration?: number;
   error?: string;
+}
+
+/**
+ * Helper function to post transcript summary to HighLevel contact notes
+ */
+async function postTranscriptToHighLevel(
+  contactId: string,
+  transcript: Transcript,
+  baseUrl: string
+): Promise<void> {
+  try {
+    // Get the client settings to retrieve the access token
+    // We need to find the user_id from the transcript's contact
+    // For now, we'll use the environment variable as fallback
+    const accessToken = process.env.GHL_ACCESS_TOKEN;
+
+    if (!accessToken) {
+      console.warn('⚠️ No HighLevel access token found, skipping note posting');
+      return;
+    }
+
+    // Format the note with call summary, sentiment, and action items
+    const sentimentEmoji =
+      transcript.sentiment === 'POSITIVE' ? '😊' :
+      transcript.sentiment === 'NEGATIVE' ? '😟' : '😐';
+
+    const dashboardUrl = `${baseUrl}/callrecordings`;
+
+    const noteBody = `
+📞 Call Transcript Summary
+
+${sentimentEmoji} Sentiment: ${transcript.sentiment} (${transcript.sentiment_score}/100)
+⏱️ Duration: ${Math.floor(transcript.duration_seconds / 60)}m ${transcript.duration_seconds % 60}s
+
+📝 Summary:
+${transcript.summary}
+
+${transcript.action_items.length > 0 ? `✅ Action Items:
+${transcript.action_items.map((item, idx) => `${idx + 1}. ${item}`).join('\n')}` : ''}
+
+🔗 View full transcript and AI insights: ${dashboardUrl}
+    `.trim();
+
+    // Post to HighLevel contact notes
+    const response = await fetch(
+      `https://services.leadconnectorhq.com/contacts/${contactId}/notes`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Version': '2021-07-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          body: noteBody
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to post note to HighLevel:', response.status, errorText);
+      throw new Error(`HighLevel API error: ${response.status}`);
+    }
+
+    console.log('✅ Successfully posted note to HighLevel contact');
+  } catch (error) {
+    console.error('❌ Error posting to HighLevel:', error);
+    throw error;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -205,6 +276,20 @@ export async function POST(request: NextRequest) {
     await saveTranscript(updatedTranscript);
 
     console.log('✅ Transcript saved successfully!');
+
+    // Step 6: Post summary back to HighLevel contact notes
+    try {
+      console.log('📝 Posting summary to HighLevel contact notes...');
+      await postTranscriptToHighLevel(
+        existingTranscript.contact_id,
+        updatedTranscript,
+        request.nextUrl.origin
+      );
+      console.log('✅ Summary posted to HighLevel successfully!');
+    } catch (noteError) {
+      // Don't fail the whole request if posting to HighLevel fails
+      console.error('⚠️ Failed to post to HighLevel notes:', noteError);
+    }
 
     return NextResponse.json({
       success: true,
