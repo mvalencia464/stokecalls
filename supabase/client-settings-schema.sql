@@ -57,5 +57,4 @@ CREATE TRIGGER update_client_settings_updated_at
 
 -- Grant permissions
 GRANT ALL ON client_settings TO authenticated;
-GRANT USAGE ON SEQUENCE client_settings_id_seq TO authenticated;
 

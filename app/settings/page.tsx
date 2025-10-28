@@ -142,14 +142,17 @@ export default function SettingsPage() {
                 {/* Info Box */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h3 className="text-sm font-semibold text-blue-900 mb-2">
-                    Where to find these credentials:
+                    📍 Where to find these credentials:
                   </h3>
-                  <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                  <ul className="text-sm text-blue-800 space-y-2">
                     <li>
-                      <strong>Location ID:</strong> HighLevel → Settings → Business Profile
+                      <strong>Location ID:</strong> HighLevel → Settings → Business Profile → Copy your Location ID
                     </li>
                     <li>
-                      <strong>Access Token:</strong> HighLevel → Settings → Integrations → API
+                      <strong>Access Token:</strong> HighLevel → Settings → <strong>Private Integrations</strong> → Create New Integration
+                      <div className="mt-1 ml-4 text-xs text-blue-700 bg-blue-100 rounded px-2 py-1">
+                        <strong>Required scopes:</strong> View Contacts, View Conversations, View Conversation Messages
+                      </div>
                     </li>
                   </ul>
                 </div>

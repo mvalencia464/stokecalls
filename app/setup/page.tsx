@@ -100,10 +100,16 @@ export default function SetupPage() {
                     Log in to your <strong>HighLevel</strong> account
                   </li>
                   <li>
-                    <strong>Location ID:</strong> Go to Settings → Business Profile
+                    <strong>Location ID:</strong> Go to Settings → Business Profile → Copy your Location ID
                   </li>
                   <li>
-                    <strong>Access Token:</strong> Go to Settings → Integrations → API
+                    <strong>Access Token:</strong> Go to Settings → <strong>Private Integrations</strong> → Create New Integration
+                    <div className="mt-2 ml-6 text-xs text-blue-700 bg-blue-100 rounded px-3 py-2">
+                      <strong>⚠️ Required scopes:</strong> View Contacts, View Conversations, View Conversation Messages
+                      <div className="mt-1 text-blue-600">
+                        (Only these 3 scopes are needed - you can remove all others)
+                      </div>
+                    </div>
                   </li>
                 </ol>
               </div>
