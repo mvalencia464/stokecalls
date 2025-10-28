@@ -56,27 +56,7 @@ export async function POST(request: NextRequest) {
       console.log('⚠️ messageId not in webhook payload, will fetch from HighLevel after getting user settings');
     }
     
-    console.log(`✅ Processing call for contact ${contactId}, message ${messageId}`);
-
-    // Create a placeholder transcript with "processing" status
-    const placeholderTranscript = {
-      id: `transcript_${Date.now()}`,
-      contact_id: contactId,
-      message_id: messageId,
-      created_at: new Date().toISOString(),
-      duration_seconds: 0,
-      sentiment: 'NEUTRAL' as const,
-      sentiment_score: 50,
-      summary: 'Processing...',
-      action_items: [],
-      full_text: '',
-      speakers: [],
-      status: 'processing' as const
-    };
-
-    console.log('💾 Saving placeholder transcript...');
-    await saveTranscript(placeholderTranscript);
-    console.log('✅ Placeholder saved');
+    console.log(`✅ Processing call for contact ${contactId}`);
 
     // Look up user by locationId to get their GHL access token
     console.log('🔍 Looking up user by locationId:', locationId);
@@ -170,6 +150,26 @@ export async function POST(request: NextRequest) {
     // Now we should have a messageId
     console.log('📝 Final messageId:', messageId);
 
+    // Create a placeholder transcript with "processing" status
+    const placeholderTranscript = {
+      id: `transcript_${Date.now()}`,
+      contact_id: contactId,
+      message_id: messageId,
+      created_at: new Date().toISOString(),
+      duration_seconds: 0,
+      sentiment: 'NEUTRAL' as const,
+      sentiment_score: 50,
+      summary: 'Processing...',
+      action_items: [],
+      full_text: '',
+      speakers: [],
+      status: 'processing' as const
+    };
+
+    console.log('💾 Saving placeholder transcript...');
+    await saveTranscript(placeholderTranscript);
+    console.log('✅ Placeholder saved');
+
     // Trigger transcription in the background (non-blocking)
     const baseUrl = request.nextUrl.origin;
 
@@ -217,11 +217,19 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error('❌ Webhook error:', error);
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('❌ Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      type: typeof error
+    });
+
     return NextResponse.json(
-      { 
-        error: 'Failed to process webhook', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+      {
+        error: 'Failed to process webhook',
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       },
       { status: 500 }
     );
