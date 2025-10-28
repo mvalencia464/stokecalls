@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 /**
  * GET /api/calls
  * Fetch call recordings for a specific contact
- * 
+ *
  * Query params:
  * - contactId: Required - The contact ID to fetch calls for
  */
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return NextResponse.json(
+        { error: auth.error?.message },
+        { status: auth.error?.status || 401 }
+      );
+    }
+
     const accessToken = process.env.GHL_ACCESS_TOKEN;
     const { searchParams } = new URL(request.url);
     const contactId = searchParams.get('contactId');

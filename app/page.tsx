@@ -1,5 +1,10 @@
 import StokeLeadsDashboard from './callrecordings';
+import { ProtectedRoute } from '@/components/protected-route';
 
 export default function Home() {
-  return <StokeLeadsDashboard />;
+  return (
+    <ProtectedRoute>
+      <StokeLeadsDashboard />
+    </ProtectedRoute>
+  );
 }

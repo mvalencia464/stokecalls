@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllTranscripts, getTranscriptsByContactId } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 /**
  * GET /api/transcripts
  * Fetch transcripts, optionally filtered by contactId
- * 
+ *
  * Query params:
  * - contactId: Filter transcripts by contact ID
  */
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return NextResponse.json(
+        { error: auth.error?.message },
+        { status: auth.error?.status || 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const contactId = searchParams.get('contactId');
     

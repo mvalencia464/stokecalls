@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return NextResponse.json(
+        { error: auth.error?.message },
+        { status: auth.error?.status || 401 }
+      );
+    }
+
     const locationId = process.env.NEXT_PUBLIC_GHL_LOCATION_ID;
     const accessToken = process.env.GHL_ACCESS_TOKEN;
 

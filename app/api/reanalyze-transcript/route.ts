@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTranscriptByMessageId, saveTranscript } from '@/lib/db';
 import { analyzeTranscript } from '@/lib/gemini';
+import { requireAuth } from '@/lib/auth';
 
 interface ReanalyzeRequest {
   messageId: string;
@@ -16,6 +17,14 @@ interface ReanalyzeRequest {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return NextResponse.json(
+        { error: auth.error?.message },
+        { status: auth.error?.status || 401 }
+      );
+    }
     const body: ReanalyzeRequest = await request.json();
     const { messageId } = body;
 

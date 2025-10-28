@@ -9,6 +9,8 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { format, formatDistanceToNow } from 'date-fns';
+import { useAuth } from '@/lib/auth-context';
+import { authenticatedFetch } from '@/lib/api-client';
 
 /**
  * --- STOKE LEADS TECHNICAL SPECIFICATION (PROTOTYPE NOTES) ---
@@ -179,6 +181,7 @@ export default function StokeLeadsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [useRealData, setUseRealData] = useState(true);
+  const { signOut, user } = useAuth();
 
   // Fetch real contacts from HighLevel
   useEffect(() => {
@@ -192,7 +195,7 @@ export default function StokeLeadsDashboard() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch('/api/contacts');
+        const response = await authenticatedFetch('/api/contacts');
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -265,11 +268,15 @@ export default function StokeLeadsDashboard() {
             <span className={cn("w-2 h-2 rounded-full", useRealData ? "bg-emerald-500 animate-pulse" : "bg-slate-400")}></span>
             {useRealData ? 'HighLevel Data' : 'Mock Data'}
           </button>
-          <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
-             <Settings className="w-5 h-5" />
-          </button>
-          <div className="w-8 h-8 bg-slate-200 rounded-full border-2 border-white shadow-sm overflow-hidden">
-            <User className="w-full h-full p-1 text-slate-500" />
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600 hidden md:block">{user?.email}</span>
+            <button
+              onClick={() => signOut()}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </header>
@@ -428,7 +435,7 @@ function ContactDetailView({ contact, onBack }: { contact: Contact, onBack: () =
   const refreshTranscripts = async () => {
     try {
       setLoadingTranscripts(true);
-      const response = await fetch(`/api/transcripts?contactId=${contact.id}`);
+      const response = await authenticatedFetch(`/api/transcripts?contactId=${contact.id}`);
       if (response.ok) {
         const data = await response.json();
         setTranscripts(data.transcripts || []);
@@ -446,7 +453,7 @@ function ContactDetailView({ contact, onBack }: { contact: Contact, onBack: () =
       try {
         setLoadingTranscripts(true);
         setTranscriptError(null);
-        const response = await fetch(`/api/transcripts?contactId=${contact.id}`);
+        const response = await authenticatedFetch(`/api/transcripts?contactId=${contact.id}`);
 
         if (!response.ok) {
           throw new Error('Failed to fetch transcripts');
@@ -939,7 +946,7 @@ function ChatTab({ transcript, contactName }: { transcript: Transcript, contactN
 
     try {
       // Call the real AI API
-      const response = await fetch('/api/ask-ai', {
+      const response = await authenticatedFetch('/api/ask-ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1106,7 +1113,7 @@ function ReanalyzeButton({ messageId, onComplete }: { messageId: string; onCompl
     setError(null);
 
     try {
-      const response = await fetch('/api/reanalyze-transcript', {
+      const response = await authenticatedFetch('/api/reanalyze-transcript', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messageId })
@@ -1186,8 +1193,8 @@ function CallsTab({ contactId, onTranscriptionComplete }: { contactId: string, o
 
         // Fetch both calls and transcripts in parallel
         const [callsResponse, transcriptsResponse] = await Promise.all([
-          fetch(`/api/calls?contactId=${contactId}`),
-          fetch(`/api/transcripts?contactId=${contactId}`)
+          authenticatedFetch(`/api/calls?contactId=${contactId}`),
+          authenticatedFetch(`/api/transcripts?contactId=${contactId}`)
         ]);
 
         if (!callsResponse.ok) {
@@ -1218,7 +1225,7 @@ function CallsTab({ contactId, onTranscriptionComplete }: { contactId: string, o
   const handleTranscribe = async (messageId: string) => {
     try {
       setTranscribingId(messageId);
-      const response = await fetch('/api/transcribe-call', {
+      const response = await authenticatedFetch('/api/transcribe-call', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
