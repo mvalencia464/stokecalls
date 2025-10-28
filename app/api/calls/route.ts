@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
     const accessToken = settings.ghl_access_token;
     const { searchParams } = new URL(request.url);
     const contactId = searchParams.get('contactId');
-    }
 
     if (!contactId) {
       return NextResponse.json(
