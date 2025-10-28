@@ -505,7 +505,7 @@ function ContactDetailView({ contact, onBack }: { contact: Contact, onBack: () =
           </div>
           {activeTranscript && (
             <div>
-              <ReanalyzeButton />
+              <ReanalyzeButton messageId={activeTranscript.message_id} onComplete={refreshTranscripts} />
             </div>
           )}
         </div>
@@ -877,24 +877,50 @@ function TabButton({ active, onClick, icon: Icon, children }: { active: boolean,
   );
 }
 
-function ReanalyzeButton() {
+function ReanalyzeButton({ messageId, onComplete }: { messageId: string; onComplete: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleClick = () => {
+  const handleClick = async () => {
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => setLoading(false), 2500);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/reanalyze-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to re-analyze transcript');
+      }
+
+      // Refresh the transcripts to show updated analysis
+      await onComplete();
+    } catch (err) {
+      console.error('Error re-analyzing:', err);
+      setError(err instanceof Error ? err.message : 'Failed to re-analyze');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <button 
-      onClick={handleClick}
-      disabled={loading}
-      className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm disabled:opacity-70"
-    >
-      <RefreshCw className={cn("w-4 h-4", loading && "animate-spin text-indigo-600")} />
-      {loading ? "Processing Call..." : "Re-analyze Call"}
-    </button>
+    <div>
+      <button
+        onClick={handleClick}
+        disabled={loading}
+        className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm disabled:opacity-70"
+      >
+        <RefreshCw className={cn("w-4 h-4", loading && "animate-spin text-indigo-600")} />
+        {loading ? "Re-analyzing..." : "Re-analyze Call"}
+      </button>
+      {error && (
+        <p className="text-xs text-red-600 mt-1">{error}</p>
+      )}
+    </div>
   );
 }
 
