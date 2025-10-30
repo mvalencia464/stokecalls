@@ -158,7 +158,8 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         audioUrl,
         contactId,
-        messageId
+        messageId,
+        userId: auth.user.id // Pass user ID for multi-tenant support
       })
     });
 

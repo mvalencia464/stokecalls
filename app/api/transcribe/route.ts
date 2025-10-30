@@ -6,6 +6,7 @@ interface TranscribeRequest {
   audioUrl: string;
   contactId?: string;
   messageId?: string;
+  userId?: string; // User ID for multi-tenant support
 }
 
 interface AssemblyAITranscript {
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: TranscribeRequest = await request.json();
-    const { audioUrl, contactId, messageId } = body;
+    const { audioUrl, contactId, messageId, userId } = body;
 
     if (!audioUrl) {
       return NextResponse.json(
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest) {
       id: transcriptId,
       contact_id: contactId || '',
       message_id: messageId || '',
+      user_id: userId, // Add user_id for multi-tenant support
       created_at: new Date().toISOString(),
       duration_seconds: 0,
       sentiment: 'NEUTRAL' as const,

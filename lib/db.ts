@@ -13,6 +13,7 @@ export interface Transcript {
   id: string;
   contact_id: string;
   message_id: string;
+  user_id?: string; // UUID of the user who owns this transcript
   created_at: string;
   duration_seconds: number;
   sentiment: Sentiment;

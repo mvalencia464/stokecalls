@@ -5,6 +5,7 @@ interface InternalTranscribeRequest {
   messageId: string;
   contactId?: string;
   ghlAccessToken: string;
+  userId?: string; // User ID for multi-tenant support
 }
 
 /**
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: InternalTranscribeRequest = await request.json();
-    const { messageId, contactId, ghlAccessToken } = body;
+    const { messageId, contactId, ghlAccessToken, userId } = body;
 
     if (!messageId || !ghlAccessToken) {
       return NextResponse.json(
@@ -136,7 +137,8 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         audioUrl,
         contactId,
-        messageId
+        messageId,
+        userId // Pass user ID for multi-tenant support
       })
     });
 

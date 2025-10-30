@@ -184,6 +184,7 @@ export async function POST(request: NextRequest) {
       id: `transcript_${Date.now()}`,
       contact_id: contactId,
       message_id: messageId,
+      user_id: settings.user_id, // Add user_id for multi-tenant support
       created_at: new Date().toISOString(),
       duration_seconds: 0,
       sentiment: 'NEUTRAL' as const,
@@ -215,7 +216,8 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         messageId,
         contactId,
-        ghlAccessToken: settings.ghl_access_token
+        ghlAccessToken: settings.ghl_access_token,
+        userId: settings.user_id // Pass user ID for multi-tenant support
       })
     })
       .then(async (response) => {
