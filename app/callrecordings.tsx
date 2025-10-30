@@ -178,6 +178,7 @@ export default function StokeLeadsDashboard() {
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSentiment, setFilterSentiment] = useState<Sentiment | 'ALL'>('ALL');
+  const [onlyWithCalls, setOnlyWithCalls] = useState(true); // Default to showing only contacts with calls
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +197,12 @@ export default function StokeLeadsDashboard() {
       try {
         setLoading(true);
         setError(null);
-        const response = await authenticatedFetch('/api/contacts');
+
+        // Add query parameter to filter by contacts with calls
+        const url = onlyWithCalls
+          ? '/api/contacts?onlyWithCalls=true'
+          : '/api/contacts';
+        const response = await authenticatedFetch(url);
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -216,7 +222,7 @@ export default function StokeLeadsDashboard() {
     }
 
     fetchContacts();
-  }, [useRealData]);
+  }, [useRealData, onlyWithCalls]);
 
   // Derived State
   const selectedContact = contacts.find(c => c.id === selectedContactId);
@@ -319,6 +325,8 @@ export default function StokeLeadsDashboard() {
             setSearchTerm={setSearchTerm}
             filterSentiment={filterSentiment}
             setFilterSentiment={setFilterSentiment}
+            onlyWithCalls={onlyWithCalls}
+            setOnlyWithCalls={setOnlyWithCalls}
             onSelect={handleContactSelect}
             totalContacts={contacts.length}
           />
@@ -336,13 +344,15 @@ export default function StokeLeadsDashboard() {
 // --- SUB-VIEWS ---
 
 function ContactListView({
-  contacts, searchTerm, setSearchTerm, filterSentiment, setFilterSentiment, onSelect, totalContacts
+  contacts, searchTerm, setSearchTerm, filterSentiment, setFilterSentiment, onlyWithCalls, setOnlyWithCalls, onSelect, totalContacts
 }: {
   contacts: Contact[],
   searchTerm: string,
   setSearchTerm: (s: string) => void,
   filterSentiment: Sentiment | 'ALL',
   setFilterSentiment: (s: Sentiment | 'ALL') => void,
+  onlyWithCalls: boolean,
+  setOnlyWithCalls: (v: boolean) => void,
   onSelect: (id: string) => void,
   totalContacts: number
 }) {
@@ -359,15 +369,15 @@ function ContactListView({
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search contacts..." 
+            <input
+              type="text"
+              placeholder="Search contacts..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full sm:w-64 transition-all"
             />
           </div>
-          <select 
+          <select
             value={filterSentiment}
             onChange={(e) => setFilterSentiment(e.target.value as any)}
             className="pl-3 pr-8 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
@@ -378,6 +388,20 @@ function ContactListView({
             <option value="NEGATIVE">Negative</option>
           </select>
         </div>
+      </div>
+
+      {/* Call History Filter */}
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="onlyWithCalls"
+          checked={onlyWithCalls}
+          onChange={(e) => setOnlyWithCalls(e.target.checked)}
+          className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-2 focus:ring-indigo-500"
+        />
+        <label htmlFor="onlyWithCalls" className="text-sm text-slate-700 cursor-pointer">
+          Only show contacts with call history
+        </label>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

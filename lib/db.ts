@@ -135,3 +135,20 @@ export async function deleteTranscript(messageId: string): Promise<boolean> {
   return true;
 }
 
+// Get unique contact IDs that have transcripts
+export async function getContactIdsWithTranscripts(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('transcripts')
+    .select('contact_id')
+    .not('contact_id', 'is', null);
+
+  if (error) {
+    console.error('Error fetching contact IDs with transcripts:', error);
+    throw error;
+  }
+
+  // Get unique contact IDs
+  const uniqueContactIds = [...new Set((data || []).map(t => t.contact_id))];
+  return uniqueContactIds;
+}
+
