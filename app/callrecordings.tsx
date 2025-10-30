@@ -263,18 +263,6 @@ export default function StokeLeadsDashboard() {
           </h1>
         </div>
         <div className="flex items-center gap-4">
-          <button
-            onClick={toggleDataSource}
-            className={cn(
-              "hidden md:flex items-center gap-2 text-sm px-3 py-1.5 rounded-full transition-colors",
-              useRealData
-                ? "text-emerald-700 bg-emerald-100 hover:bg-emerald-200"
-                : "text-slate-500 bg-slate-100 hover:bg-slate-200"
-            )}
-          >
-            <span className={cn("w-2 h-2 rounded-full", useRealData ? "bg-emerald-500 animate-pulse" : "bg-slate-400")}></span>
-            {useRealData ? 'HighLevel Data' : 'Mock Data'}
-          </button>
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-600 hidden md:block">{user?.email}</span>
             <Link

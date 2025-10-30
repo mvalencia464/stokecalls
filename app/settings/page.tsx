@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { getSupabaseBrowser } from '@/lib/supabase-client';
 import { getMyClientSettings, saveMyClientSettings } from '@/lib/client-settings';
-import { Settings, Save, Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Settings, Save, Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft, Database } from 'lucide-react';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -16,11 +17,26 @@ export default function SettingsPage() {
   const [showToken, setShowToken] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useRealData, setUseRealData] = useState(true);
 
   const [formData, setFormData] = useState({
     ghlLocationId: '',
     ghlAccessToken: '',
   });
+
+  // Load data source preference from localStorage
+  useEffect(() => {
+    const savedPreference = localStorage.getItem('useRealData');
+    if (savedPreference !== null) {
+      setUseRealData(savedPreference === 'true');
+    }
+  }, []);
+
+  const toggleDataSource = () => {
+    const newValue = !useRealData;
+    setUseRealData(newValue);
+    localStorage.setItem('useRealData', String(newValue));
+  };
 
   // Load existing settings
   useEffect(() => {
@@ -247,6 +263,51 @@ export default function SettingsPage() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+
+        {/* Data Source Toggle */}
+        <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
+            <div className="flex items-center gap-3">
+              <Database className="w-6 h-6 text-slate-600" />
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Data Source</h2>
+                <p className="text-sm text-slate-600 mt-0.5">
+                  Toggle between live HighLevel data and mock data for testing
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <button
+              onClick={toggleDataSource}
+              className={cn(
+                "flex items-center gap-3 text-sm px-4 py-3 rounded-lg transition-all w-full md:w-auto",
+                useRealData
+                  ? "text-emerald-700 bg-emerald-50 border-2 border-emerald-200 hover:bg-emerald-100"
+                  : "text-slate-600 bg-slate-50 border-2 border-slate-200 hover:bg-slate-100"
+              )}
+            >
+              <span className={cn(
+                "w-3 h-3 rounded-full",
+                useRealData ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+              )}></span>
+              <span className="font-semibold">
+                {useRealData ? 'Using HighLevel Data' : 'Using Mock Data'}
+              </span>
+              <span className="text-xs opacity-75 ml-auto">
+                Click to toggle
+              </span>
+            </button>
+
+            <p className="text-sm text-slate-500 mt-3">
+              {useRealData
+                ? "Currently fetching real data from your HighLevel account. Switch to mock data for testing without affecting your live data."
+                : "Currently using mock data for testing. Switch to HighLevel data to see your real contacts and call transcripts."
+              }
+            </p>
           </div>
         </div>
 
