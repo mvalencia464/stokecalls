@@ -13,11 +13,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get all transcripts
-    const transcripts = await getAllTranscripts();
-    
-    // Get unique contact IDs
-    const contactIds = await getContactIdsWithTranscripts();
+    // Get all transcripts for this user
+    const transcripts = await getAllTranscripts(auth.user.id);
+
+    // Get unique contact IDs for this user
+    const contactIds = await getContactIdsWithTranscripts(auth.user.id);
 
     // Group transcripts by contact
     const transcriptsByContact = transcripts.reduce((acc, t) => {

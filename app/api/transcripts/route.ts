@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     // Require authentication
     const auth = await requireAuth(request);
-    if (!auth.authenticated) {
+    if (!auth.authenticated || !auth.user) {
       return NextResponse.json(
         { error: auth.error?.message },
         { status: auth.error?.status || 401 }
@@ -22,15 +22,15 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const contactId = searchParams.get('contactId');
-    
+
     let transcripts;
-    
+
     if (contactId) {
-      transcripts = await getTranscriptsByContactId(contactId);
+      transcripts = await getTranscriptsByContactId(contactId, auth.user.id);
     } else {
-      transcripts = await getAllTranscripts();
+      transcripts = await getAllTranscripts(auth.user.id);
     }
-    
+
     return NextResponse.json({
       transcripts,
       total: transcripts.length

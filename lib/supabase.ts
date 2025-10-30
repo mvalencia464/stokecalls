@@ -33,3 +33,30 @@ export const supabase = new Proxy({} as SupabaseClient, {
   }
 });
 
+// Create an authenticated Supabase client for a specific user
+// This client respects RLS policies
+export const getAuthenticatedSupabase = (userId: string): SupabaseClient => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  }
+
+  // Create a client with anon key (respects RLS)
+  const client = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    },
+    global: {
+      headers: {
+        // Set the user context for RLS
+        'x-user-id': userId
+      }
+    }
+  });
+
+  return client;
+};
+

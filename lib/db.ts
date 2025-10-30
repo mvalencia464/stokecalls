@@ -26,12 +26,18 @@ export interface Transcript {
   status: 'processing' | 'completed' | 'failed';
 }
 
-// Read all transcripts
-export async function getAllTranscripts(): Promise<Transcript[]> {
-  const { data, error } = await supabase
+// Read all transcripts for a specific user
+export async function getAllTranscripts(userId?: string): Promise<Transcript[]> {
+  let query = supabase
     .from('transcripts')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select('*');
+
+  // Filter by user_id if provided
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     console.error('Error fetching transcripts:', error);
@@ -41,13 +47,19 @@ export async function getAllTranscripts(): Promise<Transcript[]> {
   return data || [];
 }
 
-// Get transcripts by contact ID
-export async function getTranscriptsByContactId(contactId: string): Promise<Transcript[]> {
-  const { data, error } = await supabase
+// Get transcripts by contact ID for a specific user
+export async function getTranscriptsByContactId(contactId: string, userId?: string): Promise<Transcript[]> {
+  let query = supabase
     .from('transcripts')
     .select('*')
-    .eq('contact_id', contactId)
-    .order('created_at', { ascending: false });
+    .eq('contact_id', contactId);
+
+  // Filter by user_id if provided
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     console.error('Error fetching transcripts by contact ID:', error);
@@ -136,11 +148,12 @@ export async function deleteTranscript(messageId: string): Promise<boolean> {
   return true;
 }
 
-// Get unique contact IDs that have transcripts
-export async function getContactIdsWithTranscripts(): Promise<string[]> {
+// Get unique contact IDs that have transcripts for a specific user
+export async function getContactIdsWithTranscripts(userId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('transcripts')
     .select('contact_id')
+    .eq('user_id', userId)
     .not('contact_id', 'is', null);
 
   if (error) {
@@ -150,6 +163,7 @@ export async function getContactIdsWithTranscripts(): Promise<string[]> {
 
   // Get unique contact IDs
   const uniqueContactIds = [...new Set((data || []).map(t => t.contact_id))];
+  console.log(`[DB] Found ${uniqueContactIds.length} unique contacts with transcripts for user ${userId}`);
   return uniqueContactIds;
 }
 

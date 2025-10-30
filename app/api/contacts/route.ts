@@ -35,8 +35,8 @@ export async function GET(request: NextRequest) {
     let contactIdsWithCalls: string[] = [];
     if (onlyWithCalls) {
       try {
-        contactIdsWithCalls = await getContactIdsWithTranscripts();
-        console.log('[Contacts API] Contact IDs with transcripts:', contactIdsWithCalls.length, 'contacts');
+        contactIdsWithCalls = await getContactIdsWithTranscripts(auth.user.id);
+        console.log('[Contacts API] Contact IDs with transcripts for user', auth.user.id, ':', contactIdsWithCalls.length, 'contacts');
 
         // Fetch each contact individually to ensure we get all of them
         const contactPromises = contactIdsWithCalls.map(async (contactId) => {
