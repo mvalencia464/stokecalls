@@ -31,7 +31,71 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const onlyWithCalls = searchParams.get('onlyWithCalls') === 'true';
 
-    // Fetch contacts from HighLevel API
+    // If filtering by calls, get the contact IDs first and fetch them individually
+    let contactIdsWithCalls: string[] = [];
+    if (onlyWithCalls) {
+      try {
+        contactIdsWithCalls = await getContactIdsWithTranscripts();
+        console.log('[Contacts API] Contact IDs with transcripts:', contactIdsWithCalls.length, 'contacts');
+
+        // Fetch each contact individually to ensure we get all of them
+        const contactPromises = contactIdsWithCalls.map(async (contactId) => {
+          try {
+            const contactResponse = await fetch(
+              `https://services.leadconnectorhq.com/contacts/${contactId}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Version': '2021-07-28',
+                  'Content-Type': 'application/json'
+                },
+                cache: 'no-store'
+              }
+            );
+
+            if (contactResponse.ok) {
+              const contactData = await contactResponse.json();
+              return contactData.contact;
+            }
+            return null;
+          } catch (err) {
+            console.error(`Error fetching contact ${contactId}:`, err);
+            return null;
+          }
+        });
+
+        const fetchedContacts = await Promise.all(contactPromises);
+        const validContacts = fetchedContacts.filter(c => c !== null);
+
+        // Transform to our format
+        const contacts = validContacts.map((contact: any) => ({
+          id: contact.id,
+          name: contact.firstName && contact.lastName
+            ? `${contact.firstName} ${contact.lastName}`.trim()
+            : contact.firstName || contact.lastName || contact.email || 'Unknown',
+          phone: contact.phone || contact.phoneNumber || 'N/A',
+          email: contact.email || 'N/A',
+          company_name: contact.companyName || contact.businessName || 'N/A',
+          last_call_date: contact.dateUpdated || contact.dateAdded || new Date().toISOString(),
+          latest_sentiment: 'NEUTRAL' as const,
+          status: (contact.tags?.includes('client') ? 'client' : 'lead') as 'lead' | 'client' | 'churned'
+        }));
+
+        console.log('[Contacts API] Successfully fetched', contacts.length, 'contacts with calls');
+
+        return NextResponse.json({
+          contacts,
+          total: contacts.length,
+          count: contacts.length
+        });
+
+      } catch (error) {
+        console.error('Error fetching contacts with call history:', error);
+        // Fall through to fetch all contacts
+      }
+    }
+
+    // Fetch all contacts (when not filtering or if filtering failed)
     const response = await fetch(
       `https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&limit=100`,
       {
@@ -40,7 +104,7 @@ export async function GET(request: NextRequest) {
           'Version': '2021-07-28',
           'Content-Type': 'application/json'
         },
-        cache: 'no-store' // Disable caching to always get fresh data
+        cache: 'no-store'
       }
     );
 
@@ -56,7 +120,7 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
 
     // Transform HighLevel contacts to our app's format
-    let contacts = (data.contacts || []).map((contact: any) => ({
+    const contacts = (data.contacts || []).map((contact: any) => ({
       id: contact.id,
       name: contact.firstName && contact.lastName
         ? `${contact.firstName} ${contact.lastName}`.trim()
@@ -65,20 +129,11 @@ export async function GET(request: NextRequest) {
       email: contact.email || 'N/A',
       company_name: contact.companyName || contact.businessName || 'N/A',
       last_call_date: contact.dateUpdated || contact.dateAdded || new Date().toISOString(),
-      latest_sentiment: 'NEUTRAL' as const, // Default until we have real transcript data
+      latest_sentiment: 'NEUTRAL' as const,
       status: (contact.tags?.includes('client') ? 'client' : 'lead') as 'lead' | 'client' | 'churned'
     }));
 
-    // Filter by contacts with call history if requested
-    if (onlyWithCalls) {
-      try {
-        const contactIdsWithCalls = await getContactIdsWithTranscripts();
-        contacts = contacts.filter((contact: any) => contactIdsWithCalls.includes(contact.id));
-      } catch (error) {
-        console.error('Error filtering contacts by call history:', error);
-        // If there's an error fetching transcripts, just return all contacts
-      }
-    }
+    console.log('[Contacts API] Total contacts from HighLevel:', contacts.length);
 
     return NextResponse.json({
       contacts,
